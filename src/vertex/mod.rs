@@ -98,9 +98,11 @@ impl<T> Vertex<T> {
 }
 
 impl<T> crate::traits::Drawable for Vertex<T> {
-	unsafe fn draw(&self) {
-		gl::BindVertexArray(self.vao);
-		gl::DrawArrays(gl::TRIANGLE_STRIP, 0, self.len as GLsizei);
+	fn draw(&self) {
+		unsafe {
+			gl::BindVertexArray(self.vao);
+			gl::DrawArrays(gl::TRIANGLE_STRIP, 0, self.len as GLsizei);
+		}
 	}
 }
 

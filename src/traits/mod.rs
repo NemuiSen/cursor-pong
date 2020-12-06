@@ -1,5 +1,5 @@
 pub trait Drawable {
-	unsafe fn draw(&self);
+	fn draw(&self);
 }
 
 pub trait Transformable {

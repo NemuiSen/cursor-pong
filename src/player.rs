@@ -64,7 +64,7 @@ impl Player {
 }
 
 impl Drawable for Player {
-	unsafe fn draw(&self) {
+	fn draw(&self) {
 		self.shader.use_program();
 		self.vertex.draw();
 	}
