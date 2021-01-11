@@ -2,6 +2,8 @@ mod helper;
 use std::marker::PhantomData;
 use gl::types::*;
 
+use crate::framework::traits::Drawable;
+
 pub const _VSH: &str = r#"
 	#version 330 core
 	layout (location = 0) in vec2 pos;
@@ -97,7 +99,7 @@ impl<T> Vertex<T> {
 	}
 }
 
-impl<T> crate::traits::Drawable for Vertex<T> {
+impl<T> Drawable for Vertex<T> {
 	fn draw(&self) {
 		unsafe {
 			gl::BindVertexArray(self.vao);

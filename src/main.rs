@@ -1,16 +1,21 @@
 use std::error::Error;
 use glfw::{Action, Context, Key};
 
-mod cursor_ball;
-mod global; use global::{HEIGHT, WIDTH};
-mod player;
-mod rect;
-mod traits; use traits::{Drawable};
+use cursor_pong::{
+	framework::{
+		traits::Drawable,
+	},
+	game::{
+		global::{HEIGHT, WIDTH},
+		player,
+		ball,
+	}
+};
 
 fn main() -> Result<(), Box<dyn Error>> {
 	let (mut glfw, mut window, events) = init("素晴らしい!!!")?;
 
-	let mut cursor = unsafe { cursor_ball::CursorBall::new(cgmath::vec2(WIDTH/2.0, HEIGHT/2.0)) };
+	let mut cursor = unsafe { ball::Ball::new(cgmath::vec2(WIDTH/2.0, HEIGHT/2.0)) };
 	let mut player1 = player::Player::new( 0.7, -0.4, 0.05, 0.9, player::Keys{up: glfw::Key::Up, down: glfw::Key::Down});
 	let mut player2 = player::Player::new(-0.7, -0.4, 0.05, 0.9, player::Keys{up: glfw::Key::W , down: glfw::Key::S   });
 

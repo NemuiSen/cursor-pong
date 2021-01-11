@@ -1,12 +1,12 @@
-use crate::global::{BALL_SPEED, WIDTH, HEIGHT};
+use crate::game::global::{BALL_SPEED, WIDTH, HEIGHT};
 
-pub struct CursorBall {
+pub struct Ball {
 	pos: cgmath::Vector2<f32>,
 	dir: cgmath::Vector2<f32>,
 }
 
 #[allow(dead_code)]
-impl CursorBall {
+impl Ball {
 	pub fn new(pos: cgmath::Vector2<f32>) -> Self {
 		Self {
 			pos,

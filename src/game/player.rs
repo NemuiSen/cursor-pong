@@ -1,12 +1,14 @@
-use crate::global::PLAYER_SPEED;
-use crate::rect::Rect;
-use crate::traits::{Drawable, Transformable};
-// use crate::cursor_ball::CursorBall;
+use crate::{
+	game::{global::PLAYER_SPEED, rect::Rect},
+	framework::{
+		traits::{Drawable, Transformable},
+		vertex,
+		shader,
+	}
+};
+
 use cgmath::*;
 use gl::types::*;
-
-#[path ="vertex/mod.rs"] mod vertex;
-#[path ="shader/mod.rs"] mod shader;
 
 pub struct Keys {
 	pub up: glfw::Key,
