@@ -5,7 +5,6 @@ pub struct Shader {
 	program: GLuint
 }
 
-#[allow(dead_code)]
 impl Shader {
 	pub fn new(vertex_shader_source: &str, fragment_shader_source: &str) -> Self {
 		let vertex_shader = helper::create_shader(gl::VERTEX_SHADER, vertex_shader_source);

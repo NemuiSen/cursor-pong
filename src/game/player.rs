@@ -32,7 +32,6 @@ pub struct Player {
 	rect: Rect<GLfloat>
 }
 
-#[allow(dead_code)]
 impl Player {
 	pub fn new(x: GLfloat, y: GLfloat, w: GLfloat, h: GLfloat, keys: Keys) -> Self {
 		Self {

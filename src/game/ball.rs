@@ -5,7 +5,6 @@ pub struct Ball {
 	dir: cgmath::Vector2<f32>,
 }
 
-#[allow(dead_code)]
 impl Ball {
 	pub fn new(pos: cgmath::Vector2<f32>) -> Self {
 		Self {

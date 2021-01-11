@@ -54,7 +54,6 @@ pub struct Vertex<T> {
 	phantom: PhantomData<T>
 }
 
-#[allow(dead_code)]
 impl<T> Vertex<T> {
 	pub fn new(config: &[i32], points: &[T]) -> Self {
 		unsafe {
