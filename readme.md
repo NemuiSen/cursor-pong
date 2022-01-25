@@ -1,0 +1,4 @@
+- [x] Ventana transparente
+- [x] Dibujar jugadores 
+- [ ] Manipular las coordenadas del raton
+- [x] Integrar ecs para manejar a los jugadores y la pelota
