@@ -23,8 +23,7 @@ fn main() {
 	let mut update = SystemStage::parallel();
 	update
 		.add_system(player_update.label("update"))
-		.add_system(render.label("render").after("update"))
-		.add_system(player_draw.after("render"))
+		.add_system(render.after("update"))
 		.set_run_criteria(should_close);
 	schelude.add_stage_after("startup", "update", update);
 	schelude.run(&mut world);
@@ -38,11 +37,22 @@ fn should_close(raylib: NonSendMut<(RaylibHandle, RaylibThread)>) -> ShouldRun {
 	}
 }
 
-fn render() {
-	unsafe {
-		ffi::EndDrawing();
-		ffi::BeginDrawing();
-		ffi::ClearBackground(Color::BLANK.into());
+fn render(
+	raylib: NonSendMut<(RaylibHandle, RaylibThread)>,
+	player_size: Res<PlayerSize>,
+	players_query: Query<&Player>
+) {
+	let (rl, thread) = raylib.into_inner();
+	let mut d = rl.begin_drawing(&thread);
+	d.clear_background(Color::BLANK);
+	let &PlayerSize(w, h) = player_size.into_inner();
+	for &Player(Vector2 { x, y }, ..) in players_query.iter() {
+		d.draw_rectangle(
+			x as i32 - w/2,
+			y as i32 - h/2,
+			w, h,
+			Color::MAGENTA,
+		)
 	}
 }
 

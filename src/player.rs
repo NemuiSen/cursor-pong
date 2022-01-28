@@ -3,7 +3,7 @@ use bevy_ecs::prelude::*;
 
 pub struct PlayerSize(pub i32, pub i32);
 #[derive(Component)]
-pub struct Player(Vector2, KeyboardKey, KeyboardKey);
+pub struct Player(pub Vector2, pub KeyboardKey, pub KeyboardKey);
 
 pub fn player_setup(
 	mut commands: Commands,
@@ -30,25 +30,8 @@ pub fn player_update(
 	let (rl, _) = raylib.into_inner();
 	for player in players_query.iter_mut() {
 		let Player(Vector2 { y, .. }, up, down) = player.into_inner();
-		if rl.is_key_down(*up  ) { *y -= 1.0; }
-		if rl.is_key_down(*down) { *y += 1.0; }
-	}
-}
-
-pub fn player_draw(
-	player_size: Res<PlayerSize>,
-	players_query: Query<&Player>,
-) {
-	let &PlayerSize(w, h) = player_size.into_inner();
-	for &Player(Vector2 { x, y }, ..) in players_query.iter() {
-		unsafe {
-			ffi::DrawRectangle(
-				x as i32 - w/2,
-				y as i32 - h/2,
-				w, h,
-				Color::MAGENTA.into()
-			)
-		}
+		if rl.is_key_down(*up  ) { *y -= 10.0; }
+		if rl.is_key_down(*down) { *y += 10.0; }
 	}
 }
 
