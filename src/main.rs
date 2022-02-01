@@ -1,5 +1,11 @@
-use glow::{HasContext, COLOR_BUFFER_BIT, VERTEX_SHADER, TRIANGLES, FRAGMENT_SHADER};
-use glutin::{event_loop::ControlFlow, event::{Event, WindowEvent}};
+use std::fs;
+
+use glam::*;
+use glow::*;
+use glutin::{
+	event_loop::*,
+	event::*
+};
 
 fn main() {
 	unsafe {
@@ -7,7 +13,7 @@ fn main() {
 		let window_buider = glutin::window::WindowBuilder::new()
 			.with_title("test")
 			.with_transparent(true)
-			.with_inner_size(glutin::dpi::LogicalSize::new(500.0, 500.0));
+			.with_inner_size(glutin::dpi::LogicalSize::new(800.0, 600.0));
 		let window = glutin::ContextBuilder::new()
 			.with_vsync(true)
 			.build_windowed(window_buider, &event_loop)
@@ -19,58 +25,79 @@ fn main() {
 		let vertex_array = gl.create_vertex_array().unwrap();
 		gl.bind_vertex_array(Some(vertex_array));
 
-		let (vs_source, fs_source) = (
-			r#"const vec2 verts[3] = vec2[3](
-				vec2(0.5f, 1.0f),
-				vec2(0.0f, 0.0f),
-				vec2(1.0f, 0.0f)
-			);
-			out vec2 vert;
-			void main() {
-				vert = verts[gl_VertexID];
-				gl_Position = vec4(vert - 0.5, 0.0, 1.0);
-			}"#,
-			r#"precision mediump float;
-			in vec2 vert;
-			out vec4 color;
-			void main() {
-				color = vec4(vert, 0.5, 1.0);
-			}"#,
-		);
+		let vert_source = fs::read_to_string("shaders/quad.vert").unwrap();
+		let frag_source = fs::read_to_string("shaders/color.frag").unwrap();
+
 		let version = "#version 410";
 		let program = gl.create_program().unwrap();
-		
-		let vshader = gl.create_shader(VERTEX_SHADER).unwrap();
-		gl.shader_source(vshader, &format!("{}\n{}", version, vs_source));
-		gl.compile_shader(vshader);
-		if !gl.get_shader_compile_status(vshader) {
-			panic!("{}", gl.get_shader_info_log(vshader));
+
+		let vert_shader = gl.create_shader(VERTEX_SHADER).unwrap();
+		gl.shader_source(vert_shader, &format!("{}\n{}", version, vert_source));
+		gl.compile_shader(vert_shader);
+		if !gl.get_shader_compile_status(vert_shader) {
+			panic!("{}", gl.get_shader_info_log(vert_shader));
 		}
-		gl.attach_shader(program, vshader);
-		
-		let fshader = gl.create_shader(FRAGMENT_SHADER).unwrap();
-		gl.shader_source(fshader, &format!("{}\n{}", version, fs_source));
-		gl.compile_shader(fshader);
-		if !gl.get_shader_compile_status(fshader) {
-			panic!("{}", gl.get_shader_info_log(fshader));
+		gl.attach_shader(program, vert_shader);
+
+		let frag_shader = gl.create_shader(FRAGMENT_SHADER).unwrap();
+		gl.shader_source(frag_shader, &format!("{}\n{}", version, frag_source));
+		gl.compile_shader(frag_shader);
+		if !gl.get_shader_compile_status(frag_shader) {
+			panic!("{}", gl.get_shader_info_log(frag_shader));
 		}
-		gl.attach_shader(program, fshader);
+		gl.attach_shader(program, frag_shader);
 
 		gl.link_program(program);
 		if !gl.get_program_link_status(program) {
 			panic!("{}", gl.get_program_info_log(program));
 		}
 
-		gl.detach_shader(program, vshader);
-		gl.detach_shader(program, fshader);
-		gl.delete_shader(vshader);
-		gl.delete_shader(fshader);
+		gl.detach_shader(program, vert_shader);
+		gl.detach_shader(program, frag_shader);
+		gl.delete_shader(vert_shader);
+		gl.delete_shader(frag_shader);
 
 		gl.use_program(Some(program));
+
+		let size = window.window().inner_size();
+		let w = size.width  as f32;
+		let h = size.height as f32;
+		let projection = Mat4::orthographic_rh(
+			-w,
+			 w,
+			-h,
+			 h,
+			0.0,
+			1.0
+		);
+
+		let mut transform = Mat4::IDENTITY;
+		//transform *= Mat4::from_translation(vec3(0.0, 9.0, 0.0));
+		transform *= Mat4::from_scale(vec3(1.0, 1.0, 0.0));
+		//transform *= Mat4::from_rotation_z(4.0/std::f32::consts::PI);
+
+		let mut view = Mat4::IDENTITY;
+		view *= Mat4::from_translation(vec3(0.0, 0.0, 0.0));
+		view *= Mat4::from_scale(vec3(200.0, 200.0, 0.0));
+
+		let projection_uniform = gl.get_uniform_location(program, "projection").unwrap();
+		let view_uniform       = gl.get_uniform_location(program, "view"      ).unwrap();
+		let transform_unifrom  = gl.get_uniform_location(program, "transform" ).unwrap();
+		gl.uniform_matrix_4_f32_slice(Some(&projection_uniform), false, projection.to_cols_array().as_slice());
+		gl.uniform_matrix_4_f32_slice(Some(&view_uniform      ), false, view      .to_cols_array().as_slice());
+		gl.uniform_matrix_4_f32_slice(Some(&transform_unifrom ), false, transform .to_cols_array().as_slice());
+
 		gl.clear_color(0.996, 0.419, 0.039, 0.5);
 
+		let clock = std::time::Instant::now();
 		event_loop.run(move |event, _, control_flow| {
-			*control_flow = ControlFlow::Wait;
+			let value = clock.elapsed().as_secs_f32().sin();
+			let mut transform = Mat4::IDENTITY;
+			transform *= Mat4::from_translation(vec3(value, value, 0.0));
+			transform *= Mat4::from_rotation_z(value*std::f32::consts::PI*2.0/-1.0);
+			gl.uniform_matrix_4_f32_slice(Some(&transform_unifrom), false, transform .to_cols_array().as_slice());
+
+			*control_flow = ControlFlow::Poll;
 			match event {
 				Event::LoopDestroyed => {
 					return;
@@ -80,7 +107,7 @@ fn main() {
 				}
 				Event::RedrawRequested(_) => {
 					gl.clear(COLOR_BUFFER_BIT);
-					gl.draw_arrays(TRIANGLES, 0, 3);
+					gl.draw_arrays(TRIANGLE_STRIP, 0, 4);
 					window.swap_buffers().unwrap();
 				}
 				Event::WindowEvent{ ref event, .. } => match event {
@@ -91,8 +118,31 @@ fn main() {
 							physical_size.width  as i32,
 							physical_size.height as i32,
 						);
+						let w = physical_size.width  as f32;
+						let h = physical_size.height as f32;
+						let projection = Mat4::orthographic_rh(
+							-w,
+							 w,
+							-h,
+							 h,
+							0.0,
+							1.0
+						);
+						gl.uniform_matrix_4_f32_slice(
+							Some(&projection_uniform),
+							false,
+							projection.to_cols_array().as_slice()
+						);
 						window.resize(*physical_size);
 					},
+					WindowEvent::KeyboardInput {
+						input: KeyboardInput {
+							virtual_keycode: Some(VirtualKeyCode::Escape),
+							state: ElementState::Pressed,
+							..
+						},
+						..
+					} => *control_flow = ControlFlow::Exit,
 					WindowEvent::CloseRequested => {
 						gl.delete_program(program);
 						gl.delete_vertex_array(vertex_array);

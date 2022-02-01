@@ -6,6 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-bevy_ecs = "0.6.0"
-glow = "0.11.2"
 glutin = "0.28.0"
+glow = "0.11.2"
+glam = "0.20.2"
+bevy_ecs = "0.6.0"

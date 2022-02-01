@@ -1,0 +1,5 @@
+- [x] ventana, opengl
+- [x] transparencia
+- [x] cuadrado con transformacion
+- [ ] ECS~bevy_ecs
+- [ ] Manipular las coordenadas del mouse
