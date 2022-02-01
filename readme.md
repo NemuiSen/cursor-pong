@@ -1,5 +1,5 @@
 - [x] ventana, opengl
 - [x] transparencia
 - [x] cuadrado con transformacion
-- [ ] ECS~bevy_ecs~
+- [ ] ECS<sub>bevy_ecs</sub>
 - [ ] Manipular las coordenadas del mouse
