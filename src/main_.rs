@@ -1,4 +1,6 @@
-use std::{fs, mem::size_of, time::Instant};
+mod window;
+
+use std::fs;
 
 use glam::*;
 use glow::*;
@@ -6,41 +8,43 @@ use glutin::{
 	event_loop::*,
 	event::*
 };
+use window::IntoBytes;
 
-pub trait IntoBytes {
-	unsafe fn into_bytes(&self) -> &[u8];
-}
-
-impl IntoBytes for Mat4 {
-	unsafe fn into_bytes(&self) -> &[u8] {
-		let data = self.to_cols_array();
-		let slice = std::slice::from_raw_parts(data.as_ptr() as *const u8, size_of::<Mat4>());
-		let _mat4 = Mat4::from_cols_slice(std::slice::from_raw_parts(slice.as_ptr() as *const f32, 16));
-		slice
-	}
-}
 
 struct Camera {
 	ubo: Buffer,
+	projection: Mat4,
+	view: Mat4,
 }
 
 impl Camera {
-	unsafe fn new(gl: &Context) -> Self {
+	unsafe fn new(gl: &Context, w: f32, h: f32) -> Self {
 		let ubo = gl.create_buffer().unwrap();
 		gl.bind_buffer(UNIFORM_BUFFER, Some(ubo));
-		gl.buffer_data_size(UNIFORM_BUFFER, size_of::<Mat4>() as i32 * 2, DYNAMIC_DRAW);
+		let projection = Mat4::orthographic_rh(
+			-w,
+			 w,
+			-h,
+			 h,
+			0.0,
+			1.0
+		);
+		let view = Mat4::IDENTITY * Mat4::from_scale(vec3(200.0, 200.0, 0.0));
+		gl.buffer_data_u8_slice(
+			UNIFORM_BUFFER,
+			&[projection.into_bytes(), view.into_bytes()].concat(),
+			STATIC_DRAW
+		);
+		gl.bind_buffer(UNIFORM_BUFFER, None);
 		gl.bind_buffer_base(UNIFORM_BUFFER, 0, Some(ubo));
-		gl.bind_buffer(UNIFORM_BUFFER, None);
-		Self { ubo }
+		Self {
+			ubo,
+			projection,
+			view,
+		}
 	}
 
-	unsafe fn view(&self, gl: &Context, transform: &Mat4) {
-		gl.bind_buffer(UNIFORM_BUFFER, Some(self.ubo));
-		gl.buffer_sub_data_u8_slice(UNIFORM_BUFFER, size_of::<Mat4>() as i32, transform.into_bytes());
-		gl.bind_buffer(UNIFORM_BUFFER, None);
-	}
-
-	unsafe fn resize(&self, gl: &Context, w: f32, h: f32) {
+	unsafe fn update_projection(&self, gl: &Context, w: f32, h: f32) {
 		let projection = Mat4::orthographic_rh(
 			-w,
 			 w,
@@ -63,7 +67,7 @@ impl Shader {
 	unsafe fn new(gl: &Context, vsp: String, fsp: String) -> Self {
 		let vert_source = fs::read_to_string(vsp).unwrap();
 		let frag_soruce = fs::read_to_string(fsp).unwrap();
-		let version = "#version 430";
+		let version = "#version 410";
 
 		let program = gl.create_program().unwrap();
 
@@ -104,49 +108,55 @@ impl Shader {
 
 fn main() {
 	unsafe {
-		let el = glutin::event_loop::EventLoop::new();
-		let wb = glutin::window::WindowBuilder::new()
+		let event_loop = glutin::event_loop::EventLoop::new();
+		let window_buider = glutin::window::WindowBuilder::new()
 			.with_title("test")
 			.with_transparent(true)
 			.with_inner_size(glutin::dpi::LogicalSize::new(800.0, 600.0));
 		let window = glutin::ContextBuilder::new()
 			.with_vsync(true)
-			.build_windowed(wb, &el)
+			.build_windowed(window_buider, &event_loop)
 			.unwrap()
 			.make_current()
 			.unwrap();
-		let gl = Context::from_loader_function(|s| window.get_proc_address(s) as *const _);
+		let gl = glow::Context::from_loader_function(|s| window.get_proc_address(s) as *const _);
 
+		//============[Shaders]===========//=
+		let vertex_array = gl.create_vertex_array().unwrap();
+		gl.bind_vertex_array(Some(vertex_array));
 
-		//====Camera====///////////////////////////////////////
-		let camera = Camera::new(&gl);
-		let mut view = Mat4::IDENTITY;
-		//view *= Mat4::from_translation(vec3(100.0, 70.0, 0.0));
-		view *= Mat4::from_scale(vec3(200.0, 200.0, 0.0));
-		camera.view(&gl, &view);
-
-
-		//====Shader====///////////////////////////////////////////
 		let shader = Shader::new(
 			&gl,
 			"shaders/quad.vert".to_string(),
 			"shaders/color.frag".to_string()
 		);
-		shader.uniform_block_binding(&gl, "Camera".to_string(), 0);
+		shader.uniform_block_binding(&gl, "camera".to_string(), 1);
+
 		gl.use_program(Some(shader.program));
-		let vertex_array = gl.create_vertex_array().unwrap();
-		gl.bind_vertex_array(Some(vertex_array));
+
+		//============[Matrix]===========//
+		let size = window.window().inner_size();
+		let w = size.width  as f32;
+		let h = size.height as f32;
+		let camera = Camera::new(&gl, w, h);
+
 		let mut transform = Mat4::IDENTITY;
-		let transform_location = gl.get_uniform_location(shader.program, "transform").unwrap();
+		transform *= Mat4::from_scale(vec3(1.0, 1.0, 0.0));
 
+		let transform_unifrom = gl.get_uniform_location(shader.program, "transform").unwrap();
+		gl.uniform_matrix_4_f32_slice(Some(&transform_unifrom), false, transform.to_cols_array().as_slice());
 
-		//====EventLoop====/////////////////////////////////////////
-		let mut clock = Instant::now();
 		gl.clear_color(0.996, 0.419, 0.039, 0.5);
-		el.run(move |event, _, control_flow| {
-			transform *= Mat4::from_rotation_z(clock.elapsed().as_secs_f32());
-			gl.uniform_matrix_4_f32_slice(Some(&transform_location), false, &transform.to_cols_array());
-			clock = Instant::now();
+
+		let clock = std::time::Instant::now();
+
+		event_loop.run(move |event, _, control_flow| {
+			let value = clock.elapsed().as_secs_f32().sin();
+			let mut transform = Mat4::IDENTITY;
+			transform *= Mat4::from_translation(vec3(value, value, 0.0));
+			transform *= Mat4::from_rotation_z(value*std::f32::consts::PI*2.0/-1.0);
+			gl.uniform_matrix_4_f32_slice(Some(&transform_unifrom), false, transform .to_cols_array().as_slice());
+
 			*control_flow = ControlFlow::Poll;
 			match event {
 				Event::LoopDestroyed => {
@@ -170,7 +180,7 @@ fn main() {
 						);
 						let w = physical_size.width  as f32;
 						let h = physical_size.height as f32;
-						camera.resize(&gl, w, h);
+						camera.update_projection(&gl, w, h);
 						window.resize(*physical_size);
 					},
 					WindowEvent::KeyboardInput {
@@ -193,3 +203,4 @@ fn main() {
 		});
 	}
 }
+

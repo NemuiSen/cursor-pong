@@ -1,4 +1,4 @@
-const float v = 0.25;
+const float v = 1.0;
 
 const vec2 verts[4] = vec2[4](
 	vec2( v,  v),
@@ -6,8 +6,10 @@ const vec2 verts[4] = vec2[4](
 	vec2( v, -v),
 	vec2(-v, -v)
 );
-uniform mat4 projection;
-uniform mat4 view;
+layout (std140) uniform Camera {
+	mat4 projection;
+	mat4 view;
+};
 uniform mat4 transform;
 void main() {
 	vec2 vert = verts[gl_VertexID];
