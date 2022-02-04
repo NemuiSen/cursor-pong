@@ -1,4 +1,7 @@
-use std::{fs, mem::size_of, time::Instant};
+mod opengl;
+use opengl::*;
+
+use std::time::Instant;
 
 use glam::*;
 use glow::*;
@@ -6,101 +9,6 @@ use glutin::{
 	event_loop::*,
 	event::*
 };
-
-pub trait IntoBytes {
-	unsafe fn into_bytes(&self) -> &[u8];
-}
-
-impl IntoBytes for Mat4 {
-	unsafe fn into_bytes(&self) -> &[u8] {
-		let data = self.to_cols_array();
-		let slice = std::slice::from_raw_parts(data.as_ptr() as *const u8, size_of::<Mat4>());
-		let _mat4 = Mat4::from_cols_slice(std::slice::from_raw_parts(slice.as_ptr() as *const f32, 16));
-		slice
-	}
-}
-
-struct Camera {
-	ubo: Buffer,
-}
-
-impl Camera {
-	unsafe fn new(gl: &Context) -> Self {
-		let ubo = gl.create_buffer().unwrap();
-		gl.bind_buffer(UNIFORM_BUFFER, Some(ubo));
-		gl.buffer_data_size(UNIFORM_BUFFER, size_of::<Mat4>() as i32 * 2, DYNAMIC_DRAW);
-		gl.bind_buffer_base(UNIFORM_BUFFER, 0, Some(ubo));
-		gl.bind_buffer(UNIFORM_BUFFER, None);
-		Self { ubo }
-	}
-
-	unsafe fn view(&self, gl: &Context, transform: &Mat4) {
-		gl.bind_buffer(UNIFORM_BUFFER, Some(self.ubo));
-		gl.buffer_sub_data_u8_slice(UNIFORM_BUFFER, size_of::<Mat4>() as i32, transform.into_bytes());
-		gl.bind_buffer(UNIFORM_BUFFER, None);
-	}
-
-	unsafe fn resize(&self, gl: &Context, w: f32, h: f32) {
-		let projection = Mat4::orthographic_rh(
-			-w,
-			 w,
-			-h,
-			 h,
-			0.0,
-			1.0
-		);
-		gl.bind_buffer(UNIFORM_BUFFER, Some(self.ubo));
-		gl.buffer_sub_data_u8_slice(UNIFORM_BUFFER, 0, projection.into_bytes());
-		gl.bind_buffer(UNIFORM_BUFFER, None);
-	}
-}
-
-struct Shader {
-	pub program: NativeProgram,
-}
-
-impl Shader {
-	unsafe fn new(gl: &Context, vsp: String, fsp: String) -> Self {
-		let vert_source = fs::read_to_string(vsp).unwrap();
-		let frag_soruce = fs::read_to_string(fsp).unwrap();
-		let version = "#version 430";
-
-		let program = gl.create_program().unwrap();
-
-		let shaders = vec![
-			(VERTEX_SHADER  , vert_source),
-			(FRAGMENT_SHADER, frag_soruce)
-		];
-
-		let shaders = shaders.iter().map(|(shader_type, shader_source)| {
-			let shader = gl.create_shader(*shader_type).unwrap();
-			gl.shader_source(shader, &format!("{}\n{}", version, shader_source));
-			gl.compile_shader(shader);
-			if !gl.get_shader_compile_status(shader) {
-				panic!("{}", gl.get_shader_info_log(shader));
-			}
-			gl.attach_shader(program, shader);
-			shader
-		}).collect::<Vec<_>>();
-
-		gl.link_program(program);
-		if !gl.get_program_link_status(program) {
-			panic!("{}", gl.get_program_info_log(program));
-		}
-
-		for shader in shaders {
-			gl.detach_shader(program, shader);
-			gl.delete_shader(shader);
-		}
-
-		Self { program }
-	}
-
-	unsafe fn uniform_block_binding(&self, gl: &Context, name: String, binding: u32) {
-		let index = gl.get_uniform_block_index(self.program, &name).unwrap();
-		gl.uniform_block_binding(self.program, index, binding)
-	}
-}
 
 fn main() {
 	unsafe {
@@ -127,7 +35,7 @@ fn main() {
 
 
 		//====Shader====///////////////////////////////////////////
-		let shader = Shader::new(
+		let shader = ShaderProgram::new(
 			&gl,
 			"shaders/quad.vert".to_string(),
 			"shaders/color.frag".to_string()
