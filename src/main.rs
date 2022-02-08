@@ -1,76 +1,162 @@
-mod opengl;
-use opengl::*;
+mod opengl; use opengl::*;
 
-use std::time::Instant;
+use std::{fs, collections::HashMap, time::Instant};
 
+use gl::types::*;
 use glam::*;
-use glow::*;
 use glutin::{
+	event::*,
 	event_loop::*,
-	event::*
+	window::*, ContextBuilder,
 };
+
+#[derive(Default)]
+struct Input {
+	keys: HashMap<VirtualKeyCode, bool>,
+}
+
+impl Input {
+	fn pressed(&self, key: VirtualKeyCode) -> bool {
+		*self.keys.get(&key).unwrap_or(&false)
+	}
+
+	fn update<T>(&mut self, event: &Event<T>) {
+		match event {
+			Event::WindowEvent { event, .. } => match event {
+				WindowEvent::KeyboardInput {
+					input: KeyboardInput {
+						state,
+						virtual_keycode: Some(key),
+						..
+					},
+					..
+				} => {
+					match state {
+						ElementState::Pressed  => self.keys.insert(*key, true ),
+						ElementState::Released => self.keys.insert(*key, false),
+					}.unwrap_or_default();
+				},
+				_ => (),
+			},
+			_ => (),
+		}
+	}
+}
+
+struct Player {
+	#[allow(dead_code)]
+	shader: Shader,
+	vao: GLuint,
+
+	pub transform: Mat4,
+}
+
+impl Player {
+	pub unsafe fn new() -> Self {
+		let shader = Shader::new(
+			fs::read_to_string("shaders/quad.vert" ).unwrap(),
+			fs::read_to_string("shaders/color.frag").unwrap()
+		);
+
+		gl::UseProgram(shader.program);
+		let mut vao = 0;
+		gl::GenVertexArrays(1, &mut vao);
+
+		Self {
+			shader,
+			vao,
+			transform: Mat4::IDENTITY,
+		}
+	}
+
+	pub unsafe fn update_transform(&self) {
+		let name = std::ffi::CString::new("transform").unwrap();
+		let transform_location = gl::GetUniformLocation(self.shader.program, name.as_ptr());
+		gl::UseProgram(self.shader.program);
+		gl::UniformMatrix4fv(
+			transform_location,
+			1,
+			gl::FALSE,
+			self.transform.to_cols_array().as_ptr()
+		);
+	}
+
+	pub unsafe fn draw(&self) {
+		gl::UseProgram(self.shader.program);
+		gl::BindVertexArray(self.vao);
+		gl::DrawArrays(gl::TRIANGLE_STRIP, 0, 4);
+	}
+}
+
+impl Drop for Player {
+	fn drop(&mut self) {
+	    unsafe {
+			gl::DeleteVertexArrays(1, &mut self.vao);
+		}
+	}
+}
+
+
+
+
 
 fn main() {
 	unsafe {
-		let el = glutin::event_loop::EventLoop::new();
-		let wb = glutin::window::WindowBuilder::new()
-			.with_title("test")
-			.with_transparent(true)
-			.with_inner_size(glutin::dpi::LogicalSize::new(800.0, 600.0));
-		let window = glutin::ContextBuilder::new()
+		let el = EventLoop::new();
+		let wb = WindowBuilder::new()
+			.with_title("pong!")
+			.with_transparent(true);
+		let context = ContextBuilder::new()
 			.with_vsync(true)
 			.build_windowed(wb, &el)
 			.unwrap()
 			.make_current()
 			.unwrap();
-		let gl = Context::from_loader_function(|s| window.get_proc_address(s) as *const _);
+		gl::load_with(|s| context.get_proc_address(s));
 
+		let camera = Camera::new();
 
-		//====Camera====///////////////////////////////////////
-		let camera = Camera::new(&gl);
-		let mut view = Mat4::IDENTITY;
-		//view *= Mat4::from_translation(vec3(100.0, 70.0, 0.0));
-		view *= Mat4::from_scale(vec3(200.0, 200.0, 0.0));
-		camera.view(&gl, &view);
+		let mut player1 = Player::new();
+		let mut player2 = Player::new();
+		player1.transform *= Mat4::from_translation(vec3(-0.5, 0.0, 0.0)) * Mat4::from_scale(vec3(1.0/10.0, 1.0/2.0, 0.0));
+		player2.transform *= Mat4::from_translation(vec3( 0.5, 0.0, 0.0)) * Mat4::from_scale(vec3(1.0/10.0, 1.0/2.0, 0.0));
+		player1.update_transform();
+		player2.update_transform();
 
-
-		//====Shader====///////////////////////////////////////////
-		let shader = ShaderProgram::new(
-			&gl,
-			"shaders/quad.vert".to_string(),
-			"shaders/color.frag".to_string()
-		);
-		shader.uniform_block_binding(&gl, "Camera".to_string(), 0);
-		gl.use_program(Some(shader.program));
-		let vertex_array = gl.create_vertex_array().unwrap();
-		gl.bind_vertex_array(Some(vertex_array));
-		let mut transform = Mat4::IDENTITY;
-		let transform_location = gl.get_uniform_location(shader.program, "transform").unwrap();
-
-
-		//====EventLoop====/////////////////////////////////////////
+		gl::ClearColor(0.996, 0.419, 0.039, 0.5);
 		let mut clock = Instant::now();
-		gl.clear_color(0.996, 0.419, 0.039, 0.5);
+		let mut input = Input::default();
 		el.run(move |event, _, control_flow| {
-			transform *= Mat4::from_rotation_z(clock.elapsed().as_secs_f32());
-			gl.uniform_matrix_4_f32_slice(Some(&transform_location), false, &transform.to_cols_array());
+			let mut delta = Vec2::ZERO;
+			if input.pressed(VirtualKeyCode::W) { delta.y += 1.0; }
+			if input.pressed(VirtualKeyCode::A) { delta.x -= 1.0; }
+			if input.pressed(VirtualKeyCode::S) { delta.y -= 1.0; }
+			if input.pressed(VirtualKeyCode::D) { delta.x += 1.0; }
+			let delta = delta.normalize_or_zero().extend(0.0);
+			player1.transform *= Mat4::from_translation(delta * clock.elapsed().as_secs_f32() * 5.0);
+			player1.update_transform();
+
 			clock = Instant::now();
+
+
 			*control_flow = ControlFlow::Poll;
+			input.update(&event);
 			match event {
 				Event::LoopDestroyed => {
 					return;
 				}
 				Event::MainEventsCleared => {
-					window.window().request_redraw();
+					context.window().request_redraw();
 				}
 				Event::RedrawRequested(_) => {
-					gl.clear(COLOR_BUFFER_BIT);
-					gl.draw_arrays(TRIANGLE_STRIP, 0, 4);
-					window.swap_buffers().unwrap();
+					gl::Clear(gl::COLOR_BUFFER_BIT);
+					player1.draw();
+					player2.draw();
+					context.swap_buffers().unwrap();
 				}
 				Event::WindowEvent{ ref event, .. } => match event {
 					WindowEvent::Resized(physical_size) => {
-						gl.viewport(
+						gl::Viewport(
 							0,
 							0,
 							physical_size.width  as i32,
@@ -78,8 +164,10 @@ fn main() {
 						);
 						let w = physical_size.width  as f32;
 						let h = physical_size.height as f32;
-						camera.resize(&gl, w, h);
-						window.resize(*physical_size);
+						let sz = w.min(h) as f32;
+						camera.view(Mat4::from_scale(vec3(sz, sz, 0.0)));
+						camera.resize(w, h);
+						context.resize(*physical_size);
 					},
 					WindowEvent::KeyboardInput {
 						input: KeyboardInput {
@@ -88,10 +176,10 @@ fn main() {
 							..
 						},
 						..
-					} => *control_flow = ControlFlow::Exit,
+					} => {
+						*control_flow = ControlFlow::Exit;
+					}
 					WindowEvent::CloseRequested => {
-						gl.delete_program(shader.program);
-						gl.delete_vertex_array(vertex_array);
 						*control_flow = ControlFlow::Exit
 					},
 					_ => (),
